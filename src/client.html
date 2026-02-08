@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mesa RPG</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+        body { margin: 0; overflow: hidden; background: #111; touch-action: none; font-family: sans-serif;}
+        canvas { outline: none; }
+        
+        #enable-sound-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 10000;
+            display: flex; justify-content: center; align-items: center; cursor: pointer; flex-direction: column; color: white;
+            text-align: center;
+        }
+        
+        /* BARRA SUPERIOR */
+        #status-bar {
+            position: fixed; top: 0; left: 0; width: 100%; height: 35px;
+            background: rgba(0,0,0,0.8); color: white;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 10px; font-size: 12px; z-index: 9999;
+        }
+
+        /* CONTROLE DE VOLUME */
+        #volume-control {
+            display: flex; align-items: center; gap: 5px; pointer-events: auto;
+        }
+        input[type=range] { width: 100px; cursor: pointer; }
+        
+        .status-ok { color: #00ff00; margin-right: 10px; } 
+        .status-err { color: #ff0000; margin-right: 10px; }
+    </style>
+    <script src="https://unpkg.com/konva@9/konva.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div id="enable-sound-overlay" onclick="ativarSom()">
+        <h1>CLIQUE AQUI PARA ENTRAR</h1>
+        <p>Habilita Áudio e Vídeo</p>
+    </div>
+
+    <div id="status-bar">
+        <div>
+            <span id="connection-status">🔌 Conectando...</span>
+            <span id="permission-status">🔒 Verificando...</span>
+        </div>
+        
+        <div id="volume-control">
+            <span>🔊 Volume:</span>
+            <input type="range" id="volSlider" min="0" max="1" step="0.05" value="0.5">
+        </div>
+    </div>
+
+    <div id="container" tabindex="1"></div>
+
+    <script>
+        const socket = io();
+        const isGM = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        let isBoardLocked = false; 
+        
+        // --- SISTEMA DE ÁUDIO GLOBAL ---
+        let globalVolume = 0.5;
+        let audioPlayer = new Audio();
+        let soundEnabled = false;
+
+        // Controle de Volume
+        const volSlider = document.getElementById('volSlider');
+        volSlider.addEventListener('input', (e) => {
+            globalVolume = parseFloat(e.target.value);
+            // Atualiza música
+            audioPlayer.volume = globalVolume;
+            // Atualiza todos os vídeos na tela
+            document.querySelectorAll('video').forEach(vid => {
+                vid.volume = globalVolume;
+            });
+        });
+
+        function ativarSom() {
+            document.getElementById('enable-sound-overlay').style.display = 'none';
+            soundEnabled = true;
+            // Destrava contexto
+            const s = new Audio(); s.play().catch(e=>{});
+            // Destrava vídeos e aplica volume
+            document.querySelectorAll('video').forEach(vid => {
+                vid.muted = false;
+                vid.volume = globalVolume;
+                vid.play().catch(e => {});
+            });
+        }
+
+        socket.on('play_audio', (data) => {
+            if(!soundEnabled) return;
+            audioPlayer.src = data.url; 
+            audioPlayer.loop = data.loop; 
+            audioPlayer.volume = globalVolume; // Usa o volume do slider
+            audioPlayer.play().catch(e => console.log(e));
+        });
+        socket.on('stop_audio', () => { audioPlayer.pause(); audioPlayer.currentTime = 0; });
+
+        // --- KONVA SETUP ---
+        const stage = new Konva.Stage({ container: 'container', width: window.innerWidth, height: window.innerHeight, draggable: true });
+        const mapLayer = new Konva.Layer();
+        const tokenLayer = new Konva.Layer();
+        stage.add(mapLayer); stage.add(tokenLayer);
+        document.getElementById('container').focus();
+
+        var transformer = new Konva.Transformer({ nodes: [], keepRatio: true, rotateEnabled: true, anchorSize: 20, borderStrokeWidth: 2 });
+        tokenLayer.add(transformer);
+
+        // Zoom
+        const scaleBy = 1.1;
+        stage.on('wheel', (e) => {
+            e.evt.preventDefault();
+            const oldScale = stage.scaleX();
+            const pointer = stage.getPointerPosition();
+            const mousePointTo = { x: (pointer.x - stage.x()) / oldScale, y: (pointer.y - stage.y()) / oldScale };
+            const newScale = e.evt.deltaY > 0 ? oldScale / scaleBy : oldScale * scaleBy;
+            stage.scale({ x: newScale, y: newScale });
+            const newPos = { x: pointer.x - mousePointTo.x * newScale, y: pointer.y - mousePointTo.y * newScale };
+            stage.position(newPos);
+        });
+
+        var anim = new Konva.Animation(() => {}, [mapLayer, tokenLayer]);
+        anim.start();
+
+        // --- FÁBRICA DE MÍDIA ---
+        function carregarMidia(url, callback) {
+            const isVideo = url.match(/\.(mp4|webm)$/i);
+
+            if (isVideo) {
+                // Codifica URL para evitar erros de espaço
+                const safeUrl = url.split('/').map(part => encodeURIComponent(part)).join('/').replace('assets', 'assets');
+                // Mas o servidor espera a url decodificada no src... 
+                // Na verdade, o navegador lida bem com espaços se estiverem na tag src, 
+                // mas vamos usar a URL original vinda do socket.
+                
+                const vid = document.createElement('video');
+                vid.src = url; 
+                vid.loop = true;
+                vid.crossOrigin = 'anonymous';
+                
+                // Começa mudo se não tiver clicado ainda
+                vid.muted = !soundEnabled; 
+                vid.volume = globalVolume;
+
+                vid.addEventListener('loadeddata', () => {
+                    vid.play().catch(e => {});
+                    callback(vid, true);
+                    vid.style.display = 'none';
+                    document.body.appendChild(vid);
+                });
+                vid.load();
+            } else {
+                const img = new Image();
+                img.onload = () => callback(img, false);
+                img.src = url;
+            }
+        }
+
+        function setBackground(url) {
+            mapLayer.destroyChildren();
+            document.querySelectorAll('video').forEach(v => v.remove());
+            carregarMidia(url, (mediaElement) => {
+                const bgNode = new Konva.Image({ image: mediaElement, x: 0, y: 0 });
+                mapLayer.add(bgNode);
+                mapLayer.draw();
+            });
+        }
+
+        function createToken(data) {
+            carregarMidia(data.img, (mediaElement) => {
+                const w = 80; const h = 80;
+                const tokenNode = new Konva.Image({
+                    image: mediaElement,
+                    id: data.id, x: data.x, y: data.y,
+                    scaleX: data.scaleX || 1, scaleY: data.scaleY || 1, rotation: data.rotation || 0,
+                    width: w, height: h, offsetX: w/2, offsetY: h/2,
+                    draggable: true,
+                    shadowColor: 'black', shadowBlur: 10, shadowOpacity: 0.5
+                });
+
+                tokenNode.on('dragstart', (e) => { if(!podeMover()) e.target.stopDrag(); });
+                tokenNode.on('click tap', (e) => {
+                    if(!podeMover()) return;
+                    e.cancelBubble = true; transformer.nodes([tokenNode]); tokenNode.moveToTop(); transformer.moveToTop();
+                });
+                tokenNode.on('dragmove', () => { if(podeMover()) socket.emit('move_token', { id: tokenNode.id(), x: tokenNode.x(), y: tokenNode.y() }); });
+                tokenNode.on('transformend', () => socket.emit('resize_token', { id: tokenNode.id(), scaleX: tokenNode.scaleX(), scaleY: tokenNode.scaleY(), rotation: tokenNode.rotation() }));
+                
+                tokenLayer.add(tokenNode);
+                tokenLayer.draw();
+            });
+        }
+
+        socket.on('update_token_image', (data) => {
+            const node = stage.findOne('#'+data.id);
+            if(node) {
+                if(node.image() instanceof HTMLVideoElement) node.image().remove();
+                carregarMidia(data.img, (novaMidia) => { node.image(novaMidia); tokenLayer.draw(); });
+            }
+        });
+
+        socket.on('connect', updateStatus);
+        socket.on('disconnect', updateStatus);
+        function updateStatus() {
+            const permEl = document.getElementById('permission-status');
+            const connEl = document.getElementById('connection-status');
+            connEl.innerHTML = socket.connected ? '<span class="status-ok">🟢 Online</span>' : '<span class="status-err">🔴 Offline</span>';
+            if (isGM) permEl.innerHTML = '<span class="status-ok">👑 MESTRE</span>';
+            else if (isBoardLocked) permEl.innerHTML = '<span class="status-err">🔒 TRAVADO</span>';
+            else permEl.innerHTML = '<span class="status-ok">🔓 LIVRE</span>';
+        }
+
+        socket.on('init_state', (state) => {
+            isBoardLocked = state.playersLocked; updateStatus();
+            limparTokens();
+            if(state.sceneImage) setBackground(state.sceneImage);
+            if(state.tokens) state.tokens.forEach(createToken);
+            if(state.currentAudio) socket.emit('gm_play_audio', state.currentAudio); 
+        });
+
+        socket.on('set_background', setBackground);
+        socket.on('add_token', createToken);
+        socket.on('move_token', (d) => { const n=stage.findOne('#'+d.id); if(n) n.to({x:d.x, y:d.y, duration:0.1}); });
+        socket.on('update_token_size', (d) => { const n=stage.findOne('#'+d.id); if(n && transformer.nodes().indexOf(n)===-1) {n.scaleX(d.scaleX); n.scaleY(d.scaleY); n.rotation(d.rotation);} });
+        socket.on('delete_token', (id) => { const n=stage.findOne('#'+id); if(n) { if(n.image() instanceof HTMLVideoElement) n.image().remove(); n.destroy(); transformer.nodes([]); } });
+        socket.on('clear_tokens', () => { limparTokens(); tokenLayer.draw(); });
+        socket.on('update_lock_state', (l) => { isBoardLocked = l; transformer.nodes([]); updateStatus(); });
+
+        function podeMover() { return isGM || !isBoardLocked; }
+        function limparTokens() { transformer.nodes([]); tokenLayer.find('Image').forEach(i => { if(i.image() instanceof HTMLVideoElement) i.image().remove(); i.destroy(); }); tokenLayer.draw(); }
+
+        document.getElementById('container').addEventListener('keydown', (e) => {
+            if(!podeMover()) return;
+            const sel = transformer.nodes(); if(!sel.length) return;
+            const t = sel[0];
+            if(e.key === 'f' || e.key === 'F') { t.scaleX(t.scaleX()*-1); socket.emit('resize_token', { id:t.id(), scaleX:t.scaleX(), scaleY:t.scaleY(), rotation:t.rotation() }); }
+            if(['0','1','2','3'].includes(e.key)) socket.emit('request_variation', { id: t.id(), variation: e.key });
+            if((e.key==='Delete'||e.key==='Backspace') && isGM) { if(t.image() instanceof HTMLVideoElement) t.image().remove(); t.destroy(); transformer.nodes([]); socket.emit('gm_delete_token', t.id()); }
+        });
+        
+        window.onresize = () => { stage.width(window.innerWidth); stage.height(window.innerHeight); };
+    </script>
+</body>
+</html>
