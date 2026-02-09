@@ -3,50 +3,72 @@
 <head>
     <title>Painel do Mestre</title>
     <style>
-        body { display: flex; height: 100vh; margin: 0; background: #222; color: white; font-family: sans-serif; }
-        #sidebar { width: 300px; padding: 10px; background: #333; display: flex; flex-direction: column; border-right: 2px solid #000; gap: 10px; }
-        #main { flex: 1; display: flex; flex-direction: column; }
-        #preview-container { flex: 1; background: #000; position: relative; }
+        body { display: flex; height: 100vh; margin: 0; background: #222; color: white; font-family: 'Segoe UI', sans-serif; }
+        #sidebar { 
+            width: 340px; background: #1e1e1e; display: flex; flex-direction: column; 
+            border-right: 1px solid #000; gap: 10px; padding: 10px; overflow-y: auto; 
+        }
+        #main { flex: 1; display: flex; flex-direction: column; background: #000; }
         iframe { width: 100%; height: 100%; border: none; }
+
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 5px; border: 2px solid #111; }
+        ::-webkit-scrollbar-thumb:hover { background: #00ff00; }
+
+        .item-list { 
+            overflow-y: auto; background: #111; border: 1px solid #333; border-radius: 4px; padding: 5px; min-height: 80px; max-height: 200px; 
+        }
+        .section-title { color: #888; font-size: 11px; text-transform: uppercase; font-weight: bold; margin-top: 15px; margin-bottom: 5px; letter-spacing: 1px; }
+        button { cursor: pointer; background: #333; color: white; border: 1px solid #444; padding: 8px; border-radius: 4px; transition: 0.2s; }
+        button:hover { background: #555; border-color: #666; }
         
-        .section-title { color: #aaa; font-size: 12px; margin-top: 10px; border-bottom: 1px solid #555; font-weight: bold; }
-        .item-list { overflow-y: auto; max-height: 200px; display: flex; flex-direction: column; gap: 2px; }
-        button { cursor: pointer; background: #444; color: white; border: 1px solid #555; padding: 5px; }
-        button:hover { background: #555; }
-        .asset-btn { display: flex; align-items: center; gap: 10px; padding: 5px; background: #3a3a3a; cursor: pointer; }
-        .asset-btn:hover { background: #505050; }
-        .thumb { width: 40px; height: 40px; object-fit: contain; background: #000; border-radius: 4px; }
-        #dynamic-categories { display: flex; flex-direction: column; gap: 5px; overflow-y: auto; flex: 1; }
-        .category-group { border: 1px solid #444; padding: 5px; border-radius: 5px; background: #2a2a2a; }
-        .category-btn { width: 100%; text-align: left; font-weight: bold; background: #222; margin-bottom: 5px; }
-        #ip-display { background: #004400; padding: 10px; border-radius: 5px; text-align: center; font-weight: bold;}
+        .save-box { background: #252525; padding: 10px; border: 1px solid #333; border-radius: 5px; display: flex; flex-direction: column; gap: 8px; }
+        input[type="text"] { background: #000; border: 1px solid #444; color: white; padding: 6px; border-radius: 3px; outline: none; }
         
-        #btnLock { font-weight: bold; padding: 10px; border-radius: 5px; border: none; }
-        .unlocked { background-color: #28a745; color: white; }
-        .locked { background-color: #dc3545; color: white; }
+        .asset-btn { display: flex; align-items: center; gap: 10px; padding: 6px; background: #2a2a2a; cursor: pointer; margin-bottom: 4px; border-radius: 4px; }
+        .asset-btn:hover { background: #3a3a3a; }
+        .thumb { width: 48px; height: 48px; object-fit: cover; background: #000; border-radius: 4px; border: 1px solid #444; flex-shrink: 0; }
+        
+        .category-btn { width: 100%; text-align: left; font-weight: bold; background: #222; border: 1px solid #333; margin-top: 2px; }
+        #btnLock { font-weight: bold; padding: 12px; width: 100%; font-size: 14px; text-transform: uppercase; }
+        .unlocked { background-color: #1e7e34; border: 1px solid #1e7e34; }
+        .locked { background-color: #bd2130; border: 1px solid #bd2130; }
+        #ip-display { background: #003300; padding: 10px; border-radius: 5px; text-align: center; font-weight: bold; border: 1px solid #00ff00; color: #00ff00; margin-bottom: 10px; }
     </style>
 </head>
 <body>
     <div id="sidebar">
-        <div id="ip-display">Carregando IP...</div>
-        
+        <div id="ip-display">Buscando IP...</div>
         <button id="btnLock" class="unlocked" onclick="toggleLock()">🔓 MOVIMENTAÇÃO LIBERADA</button>
 
-        <div style="display: flex; gap: 5px;">
-            <button onclick="salvarCena()" style="flex:1; background: #0055aa;">💾 Salvar</button>
-            <button onclick="limparMesa()" style="flex:1; background: #aa0000;">🗑️ Limpar</button>
+        <div class="section-title">GRAVAR JOGO</div>
+        <div class="save-box">
+            <input type="text" id="inputSessao" placeholder="Nome da Pasta (Sessão)">
+            <input type="text" id="inputCena" placeholder="Nome do Arquivo (Cena)">
+            <div style="display: flex; gap: 5px;">
+                <button onclick="salvarCena()" style="flex:1; background: #0056b3; border:none;">💾 SALVAR</button>
+                <button onclick="limparMesa()" style="flex:1; background: #880000; border:none;">🗑️ LIMPAR</button>
+            </div>
+            <div id="msg-save" style="font-size: 11px; text-align: center; color: yellow; min-height: 15px;"></div>
         </div>
 
+        <div class="section-title">AMBIENTE (Sons)</div>
+        <div style="display:flex; gap:5px; margin-bottom: 5px;">
+            <button onclick="pararSom()" style="background: #880000; flex:1;">⏹️ PARAR SOM</button>
+            <button onclick="carregarLista('Sounds', 'sound', 'lista-sons')" style="flex:1;">🔄 Atualizar</button>
+        </div>
+        <div id="lista-sons" class="item-list"></div>
+
         <div class="section-title">CENAS SALVAS</div>
-        <button onclick="carregarLista('Cenas', 'cena', 'lista-cenas')">🔄 Atualizar Cenas</button>
-        <div id="lista-cenas" class="item-list" style="max-height: 100px;"></div>
+        <div id="dynamic-scenes" class="item-list"></div>
 
-        <div class="section-title">MAPAS</div>
-        <button onclick="carregarLista('Maps', 'map', 'lista-mapas')">🔄 Atualizar Mapas</button>
-        <div id="lista-mapas" class="item-list" style="max-height: 120px;"></div>
+        <div class="section-title">MAPAS (Vídeo/Img)</div>
+        <button onclick="carregarLista('Maps', 'map', 'lista-mapas')" style="width:100%; margin-bottom:5px;">🔄 Atualizar Mapas</button>
+        <div id="lista-mapas" class="item-list"></div>
 
-        <div class="section-title">TOKENS (PASTAS)</div>
-        <div id="dynamic-categories"></div>
+        <div class="section-title">TOKENS</div>
+        <div id="dynamic-categories" class="item-list" style="flex: 1; min-height: 200px;"></div>
     </div>
 
     <div id="main">
@@ -59,93 +81,102 @@
         const socket = io('http://localhost:3000');
 
         ipcRenderer.invoke('get-ip').then(ip => {
-            document.getElementById('ip-display').innerHTML = `IP: <span style="color:lime">${ip}:3000</span>`;
+            const el = document.getElementById('ip-display');
+            if(el) el.innerHTML = `IP: ${ip}:3000`;
         });
 
         function toggleLock() { socket.emit('gm_toggle_lock'); }
-
-        socket.on('init_state', (state) => atualizarBotaoLock(state.playersLocked));
-        socket.on('update_lock_state', (isLocked) => atualizarBotaoLock(isLocked));
-
-        function atualizarBotaoLock(locked) {
+        socket.on('update_lock_state', (locked) => {
             const btn = document.getElementById('btnLock');
-            if (locked) { btn.innerText = "🔒 TRAVADO"; btn.className = "locked"; }
-            else { btn.innerText = "🔓 LIBERADO"; btn.className = "unlocked"; }
-        }
+            btn.innerText = locked ? "🔒 TRAVADO" : "🔓 LIBERADO";
+            btn.className = locked ? "locked" : "unlocked";
+        });
 
         ipcRenderer.on('folders-updated', () => {
-            carregarCategoriasTokens();
-            carregarLista('Cenas', 'cena', 'lista-cenas'); // Atualiza cenas também
+            carregarCategoriasTokens(); carregarCenasPorSessao();
+            carregarLista('Sounds', 'sound', 'lista-sons'); // Atualiza sons
+            carregarLista('Maps', 'map', 'lista-mapas');
         });
+
+        function pararSom() { socket.emit('gm_stop_audio'); }
 
         async function carregarCategoriasTokens() {
             const container = document.getElementById('dynamic-categories');
             const pastas = await ipcRenderer.invoke('get-files', 'Tokens');
             container.innerHTML = '';
-            if(pastas.length === 0) { container.innerHTML = '<div style="color:#aaa;">Vazio</div>'; return; }
-
-            pastas.forEach(pastaNome => {
-                const groupDiv = document.createElement('div');
-                groupDiv.className = 'category-group';
-                const titleBtn = document.createElement('button');
-                titleBtn.className = 'category-btn';
-                titleBtn.innerHTML = `📂 ${pastaNome}`;
-                const contentDiv = document.createElement('div');
-                contentDiv.className = 'item-list';
-                contentDiv.style.display = 'none';
-                
-                titleBtn.onclick = () => {
-                    const isHidden = contentDiv.style.display === 'none';
-                    document.querySelectorAll('#dynamic-categories .item-list').forEach(d => d.style.display = 'none');
-                    if(isHidden) { contentDiv.style.display = 'flex'; carregarLista(`Tokens/${pastaNome}`, 'token', contentDiv); }
-                };
-                groupDiv.appendChild(titleBtn); groupDiv.appendChild(contentDiv); container.appendChild(groupDiv);
-            });
+            if(pastas.length === 0) container.innerHTML = '<div style="color:#666; font-size:12px; padding:5px;">Nenhuma pasta em Tokens</div>';
+            pastas.forEach(p => criarGrupoAcordeon(container, p, `Tokens/${p}`, 'token'));
         }
 
-        async function carregarLista(pasta, tipo, targetElementOrId) {
-            const arquivos = await ipcRenderer.invoke('get-files', pasta);
-            let container = typeof targetElementOrId === 'string' ? document.getElementById(targetElementOrId) : targetElementOrId;
+        async function carregarCenasPorSessao() {
+            const container = document.getElementById('dynamic-scenes');
+            const sessoes = await ipcRenderer.invoke('get-files', 'Cenas');
             container.innerHTML = '';
+            sessoes.forEach(s => criarGrupoAcordeon(container, s, `Cenas/${s}`, 'cena'));
+        }
+
+        function criarGrupoAcordeon(container, titulo, caminhoPasta, tipo) {
+            const groupDiv = document.createElement('div');
+            groupDiv.className = 'category-group';
+            const titleBtn = document.createElement('button');
+            titleBtn.className = 'category-btn';
+            titleBtn.innerHTML = `📂 ${titulo}`;
+            const contentDiv = document.createElement('div');
+            contentDiv.style.display = 'none'; contentDiv.style.paddingLeft = '5px';
+            titleBtn.onclick = () => {
+                const isHidden = contentDiv.style.display === 'none';
+                if(isHidden) { contentDiv.style.display = 'block'; carregarConteudoDaPasta(caminhoPasta, tipo, contentDiv); } 
+                else { contentDiv.style.display = 'none'; }
+            };
+            groupDiv.appendChild(titleBtn); groupDiv.appendChild(contentDiv); container.appendChild(groupDiv);
+        }
+
+        async function carregarConteudoDaPasta(pasta, tipo, container) {
+            const arquivos = await ipcRenderer.invoke('get-files', pasta);
+            container.innerHTML = '';
+            if (arquivos.length === 0) { container.innerHTML = '<div style="padding:5px; color:#555; font-size:10px;">Vazio</div>'; return; }
+
             arquivos.forEach(file => {
                 const btn = document.createElement('div');
                 btn.className = 'asset-btn';
-                const serverUrl = `/assets/${pasta}/${file}`;
-                
+                const safeName = encodeURIComponent(file);
+                const thumbUrl = `http://localhost:3000/assets/${pasta}/${safeName}`;
+                const socketUrl = `/assets/${pasta}/${file}`;
+
                 if (tipo === 'cena') {
-                    btn.innerHTML = `🎬 ${file.replace('.json', '')}`;
-                    btn.onclick = () => carregarCena(file);
-                } else {
-                    btn.innerHTML = `<img src="../assets/${pasta}/${file}" class="thumb"> <span>${file.substring(0, 12)}...</span>`;
+                    btn.innerHTML = `🎬 <span style="font-size:12px">${file.replace('.json', '')}</span>`;
+                    btn.onclick = async () => { if(confirm("Carregar cena?")) ipcRenderer.invoke('load-scene', { nomeSessao: pasta.split('/')[1], nomeArquivo: file }); };
+                } 
+                else if (tipo === 'sound') {
+                    // Lógica específica de SOM
+                    btn.innerHTML = `🎵 <span style="font-size:12px">${file}</span>`;
+                    btn.onclick = () => socket.emit('gm_play_audio', { url: socketUrl, loop: true });
+                }
+                else {
+                    const isVideo = file.match(/\.(mp4|webm)$/i);
+                    let thumbHtml = isVideo ? `<video src="${thumbUrl}" class="thumb" autoplay loop muted playsinline></video>` : `<img src="${thumbUrl}" class="thumb">`;
+                    btn.innerHTML = `${thumbHtml} <div style="display:flex; flex-direction:column;"><span style="font-size:11px; font-weight:bold;">${file.substring(0, 18)}</span></div>`;
                     btn.onclick = () => {
-                        if(tipo === 'map') socket.emit('gm_change_map', serverUrl);
-                        else socket.emit('gm_add_token', { id: 'tk_'+Date.now(), x: 400, y: 300, img: serverUrl });
+                        if(tipo === 'map') socket.emit('gm_change_map', socketUrl);
+                        else socket.emit('gm_add_token', { id: 'tk_'+Date.now(), x: 400, y: 300, img: socketUrl });
                     };
                 }
                 container.appendChild(btn);
             });
         }
-
-        // --- SALVAMENTO COM FEEDBACK ---
+        
+        function carregarLista(pasta, tipo, id) { const el = document.getElementById(id); if(el) carregarConteudoDaPasta(pasta, tipo, el); }
+        function limparMesa() { if(confirm("Limpar?")) socket.emit('gm_clear_all'); }
         async function salvarCena() {
-            const nome = prompt("Nome da Cena (ex: Batalha Final):");
-            if (nome) { 
-                const resposta = await ipcRenderer.invoke('save-scene', nome);
-                if (resposta.success) {
-                    alert("✅ Cena Salva com Sucesso!");
-                    carregarLista('Cenas', 'cena', 'lista-cenas');
-                } else {
-                    alert("❌ Erro ao salvar: " + resposta.error);
-                }
-            }
+            const s = document.getElementById('inputSessao').value; const c = document.getElementById('inputCena').value;
+            if(!s || !c) { document.getElementById('msg-save').innerText = "❌ Preencha os nomes!"; document.getElementById('msg-save').style.color = "red"; return; }
+            document.getElementById('msg-save').innerText = "Salvando...";
+            const res = await ipcRenderer.invoke('save-scene', { nomeSessao: s, nomeCena: c });
+            if(res.success) { document.getElementById('msg-save').innerText = "✅ Salvo!"; document.getElementById('msg-save').style.color = "lime"; carregarCenasPorSessao(); } 
+            else { document.getElementById('msg-save').innerText = "Erro!"; alert(res.error); }
         }
 
-        async function carregarCena(arq) {
-            if(confirm(`Carregar ${arq}?`)) { await ipcRenderer.invoke('load-scene', arq); document.getElementById('preview').src = document.getElementById('preview').src; }
-        }
-        function limparMesa() { if(confirm("Limpar tudo?")) socket.emit('gm_clear_all'); }
-
-        setTimeout(() => { carregarLista('Cenas', 'cena', 'lista-cenas'); carregarLista('Maps', 'map', 'lista-mapas'); carregarCategoriasTokens(); }, 500);
+        setTimeout(() => { carregarLista('Maps', 'map', 'lista-mapas'); carregarLista('Sounds', 'sound', 'lista-sons'); carregarCategoriasTokens(); carregarCenasPorSessao(); }, 500);
     </script>
 </body>
 </html>
