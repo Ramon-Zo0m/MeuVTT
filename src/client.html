@@ -14,7 +14,6 @@
             text-align: center;
         }
         
-        /* BARRA SUPERIOR */
         #status-bar {
             position: fixed; top: 0; left: 0; width: 100%; height: 35px;
             background: rgba(0,0,0,0.8); color: white;
@@ -22,12 +21,8 @@
             padding: 0 10px; font-size: 12px; z-index: 9999;
         }
 
-        /* CONTROLE DE VOLUME */
-        #volume-control {
-            display: flex; align-items: center; gap: 5px; pointer-events: auto;
-        }
+        #volume-control { display: flex; align-items: center; gap: 5px; pointer-events: auto; }
         input[type=range] { width: 100px; cursor: pointer; }
-        
         .status-ok { color: #00ff00; margin-right: 10px; } 
         .status-err { color: #ff0000; margin-right: 10px; }
     </style>
@@ -45,9 +40,8 @@
             <span id="connection-status">🔌 Conectando...</span>
             <span id="permission-status">🔒 Verificando...</span>
         </div>
-        
         <div id="volume-control">
-            <span>🔊 Volume:</span>
+            <span>🔊 Vol:</span>
             <input type="range" id="volSlider" min="0" max="1" step="0.05" value="0.5">
         </div>
     </div>
@@ -59,46 +53,34 @@
         const isGM = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         let isBoardLocked = false; 
         
-        // --- SISTEMA DE ÁUDIO GLOBAL ---
         let globalVolume = 0.5;
         let audioPlayer = new Audio();
         let soundEnabled = false;
 
-        // Controle de Volume
-        const volSlider = document.getElementById('volSlider');
-        volSlider.addEventListener('input', (e) => {
+        // --- VOLUME ---
+        document.getElementById('volSlider').addEventListener('input', (e) => {
             globalVolume = parseFloat(e.target.value);
-            // Atualiza música
             audioPlayer.volume = globalVolume;
-            // Atualiza todos os vídeos na tela
-            document.querySelectorAll('video').forEach(vid => {
-                vid.volume = globalVolume;
-            });
+            document.querySelectorAll('video').forEach(vid => vid.volume = globalVolume);
         });
 
         function ativarSom() {
             document.getElementById('enable-sound-overlay').style.display = 'none';
             soundEnabled = true;
-            // Destrava contexto
-            const s = new Audio(); s.play().catch(e=>{});
-            // Destrava vídeos e aplica volume
+            new Audio().play().catch(e=>{}); // Destrava AudioContext
             document.querySelectorAll('video').forEach(vid => {
-                vid.muted = false;
-                vid.volume = globalVolume;
-                vid.play().catch(e => {});
+                vid.muted = false; vid.volume = globalVolume; vid.play().catch(e=>{});
             });
         }
 
         socket.on('play_audio', (data) => {
             if(!soundEnabled) return;
-            audioPlayer.src = data.url; 
-            audioPlayer.loop = data.loop; 
-            audioPlayer.volume = globalVolume; // Usa o volume do slider
+            audioPlayer.src = data.url; audioPlayer.loop = data.loop; audioPlayer.volume = globalVolume;
             audioPlayer.play().catch(e => console.log(e));
         });
         socket.on('stop_audio', () => { audioPlayer.pause(); audioPlayer.currentTime = 0; });
 
-        // --- KONVA SETUP ---
+        // --- KONVA ---
         const stage = new Konva.Stage({ container: 'container', width: window.innerWidth, height: window.innerHeight, draggable: true });
         const mapLayer = new Konva.Layer();
         const tokenLayer = new Konva.Layer();
@@ -107,6 +89,17 @@
 
         var transformer = new Konva.Transformer({ nodes: [], keepRatio: true, rotateEnabled: true, anchorSize: 20, borderStrokeWidth: 2 });
         tokenLayer.add(transformer);
+
+        // --- CORREÇÃO DO CLIQUE (DESELECIONAR) ---
+        stage.on('click tap', (e) => {
+            // Se o alvo do clique for o STAGE (fundo preto)
+            // OU se o alvo pertencer ao MAPLAYER (a imagem do mapa)
+            if (e.target === stage || e.target.getLayer() === mapLayer) {
+                transformer.nodes([]); // Limpa a seleção
+                tokenLayer.draw();     // Atualiza a tela
+                return;
+            }
+        });
 
         // Zoom
         const scaleBy = 1.1;
@@ -127,28 +120,13 @@
         // --- FÁBRICA DE MÍDIA ---
         function carregarMidia(url, callback) {
             const isVideo = url.match(/\.(mp4|webm)$/i);
-
             if (isVideo) {
-                // Codifica URL para evitar erros de espaço
-                const safeUrl = url.split('/').map(part => encodeURIComponent(part)).join('/').replace('assets', 'assets');
-                // Mas o servidor espera a url decodificada no src... 
-                // Na verdade, o navegador lida bem com espaços se estiverem na tag src, 
-                // mas vamos usar a URL original vinda do socket.
-                
                 const vid = document.createElement('video');
-                vid.src = url; 
-                vid.loop = true;
-                vid.crossOrigin = 'anonymous';
-                
-                // Começa mudo se não tiver clicado ainda
-                vid.muted = !soundEnabled; 
-                vid.volume = globalVolume;
-
+                vid.src = url; vid.loop = true; vid.crossOrigin = 'anonymous';
+                vid.muted = !soundEnabled; vid.volume = globalVolume;
                 vid.addEventListener('loadeddata', () => {
-                    vid.play().catch(e => {});
-                    callback(vid, true);
-                    vid.style.display = 'none';
-                    document.body.appendChild(vid);
+                    vid.play().catch(e=>{}); callback(vid, true);
+                    vid.style.display = 'none'; document.body.appendChild(vid);
                 });
                 vid.load();
             } else {
@@ -181,10 +159,15 @@
                 });
 
                 tokenNode.on('dragstart', (e) => { if(!podeMover()) e.target.stopDrag(); });
+                
                 tokenNode.on('click tap', (e) => {
                     if(!podeMover()) return;
-                    e.cancelBubble = true; transformer.nodes([tokenNode]); tokenNode.moveToTop(); transformer.moveToTop();
+                    e.cancelBubble = true; // IMPEDE QUE O CLIQUE PASSE PARA O MAPA
+                    transformer.nodes([tokenNode]); 
+                    tokenNode.moveToTop(); 
+                    transformer.moveToTop();
                 });
+                
                 tokenNode.on('dragmove', () => { if(podeMover()) socket.emit('move_token', { id: tokenNode.id(), x: tokenNode.x(), y: tokenNode.y() }); });
                 tokenNode.on('transformend', () => socket.emit('resize_token', { id: tokenNode.id(), scaleX: tokenNode.scaleX(), scaleY: tokenNode.scaleY(), rotation: tokenNode.rotation() }));
                 
