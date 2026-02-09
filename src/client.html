@@ -7,6 +7,7 @@
         body { margin: 0; overflow: hidden; background: #111; touch-action: none; font-family: sans-serif;}
         canvas { outline: none; }
         
+        /* Tela de entrada para ativar som */
         #enable-sound-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.95); z-index: 10000;
@@ -14,15 +15,18 @@
             text-align: center;
         }
         
+        /* Barra superior de status */
         #status-bar {
             position: fixed; top: 0; left: 0; width: 100%; height: 35px;
             background: rgba(0,0,0,0.8); color: white;
             display: flex; align-items: center; justify-content: space-between;
             padding: 0 10px; font-size: 12px; z-index: 9999;
         }
-
+        
+        /* Slider de volume */
         #volume-control { display: flex; align-items: center; gap: 5px; pointer-events: auto; }
         input[type=range] { width: 100px; cursor: pointer; }
+        
         .status-ok { color: #00ff00; margin-right: 10px; } 
         .status-err { color: #ff0000; margin-right: 10px; }
     </style>
@@ -36,72 +40,75 @@
     </div>
 
     <div id="status-bar">
-        <div>
-            <span id="connection-status">🔌 Conectando...</span>
-            <span id="permission-status">🔒 Verificando...</span>
-        </div>
-        <div id="volume-control">
-            <span>🔊 Vol:</span>
-            <input type="range" id="volSlider" min="0" max="1" step="0.05" value="0.5">
-        </div>
+        <div><span id="connection-status">🔌 Conectando...</span><span id="permission-status">🔒 Verificando...</span></div>
+        <div id="volume-control"><span>🔊 Vol:</span><input type="range" id="volSlider" min="0" max="1" step="0.05" value="0.5"></div>
     </div>
 
     <div id="container" tabindex="1"></div>
 
     <script>
         const socket = io();
+        // Verifica se é o Mestre (localhost)
         const isGM = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         let isBoardLocked = false; 
         
+        // --- SISTEMA DE ÁUDIO ---
         let globalVolume = 0.5;
         let audioPlayer = new Audio();
         let soundEnabled = false;
 
-        // --- VOLUME ---
+        // Controle de Volume (Slider)
         document.getElementById('volSlider').addEventListener('input', (e) => {
             globalVolume = parseFloat(e.target.value);
             audioPlayer.volume = globalVolume;
+            // Atualiza volume de todos os vídeos na tela
             document.querySelectorAll('video').forEach(vid => vid.volume = globalVolume);
         });
 
+        // Ativa som ao clicar na tela inicial
         function ativarSom() {
             document.getElementById('enable-sound-overlay').style.display = 'none';
             soundEnabled = true;
-            new Audio().play().catch(e=>{}); // Destrava AudioContext
-            document.querySelectorAll('video').forEach(vid => {
-                vid.muted = false; vid.volume = globalVolume; vid.play().catch(e=>{});
+            new Audio().play().catch(e=>{}); // Destrava contexto de áudio
+            // Liga som dos vídeos já carregados
+            document.querySelectorAll('video').forEach(vid => { 
+                vid.muted = false; 
+                vid.volume = globalVolume; 
+                vid.play().catch(e=>{}); 
             });
         }
 
+        // Tocar música de fundo
         socket.on('play_audio', (data) => {
             if(!soundEnabled) return;
-            audioPlayer.src = data.url; audioPlayer.loop = data.loop; audioPlayer.volume = globalVolume;
+            audioPlayer.src = data.url; 
+            audioPlayer.loop = data.loop; 
+            audioPlayer.volume = globalVolume;
             audioPlayer.play().catch(e => console.log(e));
         });
+        
         socket.on('stop_audio', () => { audioPlayer.pause(); audioPlayer.currentTime = 0; });
 
-        // --- KONVA ---
+        // --- KONVA (CANVAS) ---
         const stage = new Konva.Stage({ container: 'container', width: window.innerWidth, height: window.innerHeight, draggable: true });
         const mapLayer = new Konva.Layer();
         const tokenLayer = new Konva.Layer();
         stage.add(mapLayer); stage.add(tokenLayer);
         document.getElementById('container').focus();
 
+        // Caixa de seleção (Transformer)
         var transformer = new Konva.Transformer({ nodes: [], keepRatio: true, rotateEnabled: true, anchorSize: 20, borderStrokeWidth: 2 });
         tokenLayer.add(transformer);
 
-        // --- CORREÇÃO DO CLIQUE (DESELECIONAR) ---
+        // Clicar no mapa remove a seleção
         stage.on('click tap', (e) => {
-            // Se o alvo do clique for o STAGE (fundo preto)
-            // OU se o alvo pertencer ao MAPLAYER (a imagem do mapa)
             if (e.target === stage || e.target.getLayer() === mapLayer) {
-                transformer.nodes([]); // Limpa a seleção
-                tokenLayer.draw();     // Atualiza a tela
-                return;
+                transformer.nodes([]); 
+                tokenLayer.draw();
             }
         });
 
-        // Zoom
+        // Zoom com a roda do mouse
         const scaleBy = 1.1;
         stage.on('wheel', (e) => {
             e.evt.preventDefault();
@@ -114,19 +121,22 @@
             stage.position(newPos);
         });
 
+        // Loop de animação (Necessário para vídeos rodarem no canvas)
         var anim = new Konva.Animation(() => {}, [mapLayer, tokenLayer]);
         anim.start();
 
-        // --- FÁBRICA DE MÍDIA ---
+        // --- CARREGADOR DE MÍDIA (IMG/VIDEO) ---
         function carregarMidia(url, callback) {
             const isVideo = url.match(/\.(mp4|webm)$/i);
             if (isVideo) {
                 const vid = document.createElement('video');
                 vid.src = url; vid.loop = true; vid.crossOrigin = 'anonymous';
-                vid.muted = !soundEnabled; vid.volume = globalVolume;
+                vid.muted = !soundEnabled; // Começa mudo se não clicou na tela ainda
+                vid.volume = globalVolume;
                 vid.addEventListener('loadeddata', () => {
-                    vid.play().catch(e=>{}); callback(vid, true);
-                    vid.style.display = 'none'; document.body.appendChild(vid);
+                    vid.play().catch(e=>{}); 
+                    callback(vid, true);
+                    vid.style.display = 'none'; document.body.appendChild(vid); // Mantém no DOM
                 });
                 vid.load();
             } else {
@@ -136,9 +146,10 @@
             }
         }
 
+        // Definir Fundo (Mapa)
         function setBackground(url) {
             mapLayer.destroyChildren();
-            document.querySelectorAll('video').forEach(v => v.remove());
+            document.querySelectorAll('video').forEach(v => v.remove()); // Limpa vídeos antigos
             carregarMidia(url, (mediaElement) => {
                 const bgNode = new Konva.Image({ image: mediaElement, x: 0, y: 0 });
                 mapLayer.add(bgNode);
@@ -146,36 +157,35 @@
             });
         }
 
+        // Criar Token
         function createToken(data) {
             carregarMidia(data.img, (mediaElement) => {
                 const w = 80; const h = 80;
                 const tokenNode = new Konva.Image({
-                    image: mediaElement,
-                    id: data.id, x: data.x, y: data.y,
+                    image: mediaElement, id: data.id, x: data.x, y: data.y,
                     scaleX: data.scaleX || 1, scaleY: data.scaleY || 1, rotation: data.rotation || 0,
                     width: w, height: h, offsetX: w/2, offsetY: h/2,
-                    draggable: true,
-                    shadowColor: 'black', shadowBlur: 10, shadowOpacity: 0.5
+                    draggable: true, shadowColor: 'black', shadowBlur: 10, shadowOpacity: 0.5
                 });
 
+                // Eventos de Mouse
                 tokenNode.on('dragstart', (e) => { if(!podeMover()) e.target.stopDrag(); });
-                
                 tokenNode.on('click tap', (e) => {
                     if(!podeMover()) return;
-                    e.cancelBubble = true; // IMPEDE QUE O CLIQUE PASSE PARA O MAPA
+                    e.cancelBubble = true; 
                     transformer.nodes([tokenNode]); 
-                    tokenNode.moveToTop(); 
-                    transformer.moveToTop();
+                    tokenNode.moveToTop(); transformer.moveToTop();
                 });
-                
                 tokenNode.on('dragmove', () => { if(podeMover()) socket.emit('move_token', { id: tokenNode.id(), x: tokenNode.x(), y: tokenNode.y() }); });
                 tokenNode.on('transformend', () => socket.emit('resize_token', { id: tokenNode.id(), scaleX: tokenNode.scaleX(), scaleY: tokenNode.scaleY(), rotation: tokenNode.rotation() }));
                 
-                tokenLayer.add(tokenNode);
-                tokenLayer.draw();
+                tokenLayer.add(tokenNode); tokenLayer.draw();
             });
         }
 
+        // --- SOCKET EVENTOS ---
+        
+        // Atualiza imagem do token (Skins)
         socket.on('update_token_image', (data) => {
             const node = stage.findOne('#'+data.id);
             if(node) {
@@ -184,6 +194,7 @@
             }
         });
 
+        // Atualiza Status da Conexão
         socket.on('connect', updateStatus);
         socket.on('disconnect', updateStatus);
         function updateStatus() {
@@ -195,6 +206,7 @@
             else permEl.innerHTML = '<span class="status-ok">🔓 LIVRE</span>';
         }
 
+        // Inicialização
         socket.on('init_state', (state) => {
             isBoardLocked = state.playersLocked; updateStatus();
             limparTokens();
@@ -203,6 +215,7 @@
             if(state.currentAudio) socket.emit('gm_play_audio', state.currentAudio); 
         });
 
+        // Eventos de Jogo
         socket.on('set_background', setBackground);
         socket.on('add_token', createToken);
         socket.on('move_token', (d) => { const n=stage.findOne('#'+d.id); if(n) n.to({x:d.x, y:d.y, duration:0.1}); });
@@ -211,16 +224,32 @@
         socket.on('clear_tokens', () => { limparTokens(); tokenLayer.draw(); });
         socket.on('update_lock_state', (l) => { isBoardLocked = l; transformer.nodes([]); updateStatus(); });
 
+        // Helpers
         function podeMover() { return isGM || !isBoardLocked; }
-        function limparTokens() { transformer.nodes([]); tokenLayer.find('Image').forEach(i => { if(i.image() instanceof HTMLVideoElement) i.image().remove(); i.destroy(); }); tokenLayer.draw(); }
+        function limparTokens() { 
+            transformer.nodes([]); 
+            tokenLayer.find('Image').forEach(i => { if(i.image() instanceof HTMLVideoElement) i.image().remove(); i.destroy(); }); 
+            tokenLayer.draw(); 
+        }
 
+        // --- ATALHOS DE TECLADO ---
         document.getElementById('container').addEventListener('keydown', (e) => {
             if(!podeMover()) return;
             const sel = transformer.nodes(); if(!sel.length) return;
             const t = sel[0];
-            if(e.key === 'f' || e.key === 'F') { t.scaleX(t.scaleX()*-1); socket.emit('resize_token', { id:t.id(), scaleX:t.scaleX(), scaleY:t.scaleY(), rotation:t.rotation() }); }
+            
+            // F: Flip
+            if(e.key === 'f' || e.key === 'F') { 
+                t.scaleX(t.scaleX()*-1); 
+                socket.emit('resize_token', { id:t.id(), scaleX:t.scaleX(), scaleY:t.scaleY(), rotation:t.rotation() }); 
+            }
+            // 0-3: Skins
             if(['0','1','2','3'].includes(e.key)) socket.emit('request_variation', { id: t.id(), variation: e.key });
-            if((e.key==='Delete'||e.key==='Backspace') && isGM) { if(t.image() instanceof HTMLVideoElement) t.image().remove(); t.destroy(); transformer.nodes([]); socket.emit('gm_delete_token', t.id()); }
+            // Delete: Apagar (Só Mestre)
+            if((e.key==='Delete'||e.key==='Backspace') && isGM) { 
+                if(t.image() instanceof HTMLVideoElement) t.image().remove(); 
+                t.destroy(); transformer.nodes([]); socket.emit('gm_delete_token', t.id()); 
+            }
         });
         
         window.onresize = () => { stage.width(window.innerWidth); stage.height(window.innerHeight); };
