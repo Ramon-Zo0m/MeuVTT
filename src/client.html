@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Mesa RPG</title>
+    <title>OpenVTT - WEB</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <link rel="icon" type="image/png" href="/assets/icon.png">
     <style>
         body { margin: 0; overflow: hidden; background: #111; touch-action: none; font-family: sans-serif;}
         canvas { outline: none; }
@@ -41,9 +42,7 @@
 
     <script>
         const socket = io({
-            reconnection: true,             // Tenta reconectar se cair
-            reconnectionAttempts: Infinity,
-            reconnectionDelay: 1000
+            reconnection: true, reconnectionAttempts: Infinity, reconnectionDelay: 1000
         });
         
         const isGM = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -53,7 +52,6 @@
         let audioPlayer = new Audio();
         let soundEnabled = false;
 
-        // --- VOLUME ---
         document.getElementById('volSlider').addEventListener('input', (e) => {
             globalVolume = parseFloat(e.target.value);
             audioPlayer.volume = globalVolume; 
@@ -64,50 +62,32 @@
             document.getElementById('enable-sound-overlay').style.display = 'none';
             soundEnabled = true;
             new Audio().play().catch(e=>{}); 
-            // Destrava videos
             document.querySelectorAll('video').forEach(vid => { vid.muted = false; vid.volume = globalVolume; vid.play().catch(e=>{}); });
-            
-            // Se tiver musica pausada esperando click, toca agora
             if(audioPlayer.src && audioPlayer.paused) audioPlayer.play().catch(e=>{});
         }
 
-        // --- ÁUDIO SINCRONIZADO (TIMECODE) ---
         socket.on('play_audio', (data) => {
-            // Se já estiver tocando a mesma musica, ignora
             const fileName = data.url.split('/').pop();
             const currentName = audioPlayer.src.split('/').pop();
-            
             if (currentName === fileName && !audioPlayer.paused) return;
+            audioPlayer.src = data.url; audioPlayer.loop = data.loop; audioPlayer.volume = globalVolume;
 
-            audioPlayer.src = data.url; 
-            audioPlayer.loop = data.loop; 
-            audioPlayer.volume = globalVolume;
-
-            // Calcula onde a musica deve estar
             if (data.startTime) {
                 const now = Date.now();
-                const diff = (now - data.startTime) / 1000; // Segundos passados
-                
-                // Espera carregar metadata para pular
+                const diff = (now - data.startTime) / 1000;
                 audioPlayer.onloadedmetadata = () => {
-                    if (diff < audioPlayer.duration) {
-                        audioPlayer.currentTime = diff;
-                    } else if (data.loop) {
-                        audioPlayer.currentTime = diff % audioPlayer.duration;
-                    }
+                    if (diff < audioPlayer.duration) audioPlayer.currentTime = diff;
+                    else if (data.loop) audioPlayer.currentTime = diff % audioPlayer.duration;
                     if(soundEnabled) audioPlayer.play().catch(e => console.log(e));
                 };
-            } else {
-                if(soundEnabled) audioPlayer.play().catch(e => console.log(e));
-            }
+            } else { if(soundEnabled) audioPlayer.play().catch(e => console.log(e)); }
         });
         
         socket.on('stop_audio', () => { audioPlayer.pause(); audioPlayer.currentTime = 0; audioPlayer.src = ""; });
 
         // --- KONVA ---
         const stage = new Konva.Stage({ container: 'container', width: window.innerWidth, height: window.innerHeight, draggable: true });
-        // Expor stage para o Dashboard (iframe) conseguir pegar a posição
-        window.stage = stage; 
+        window.stage = stage; // Expor para o Dashboard
 
         const mapLayer = new Konva.Layer();
         const tokenLayer = new Konva.Layer();
@@ -116,6 +96,41 @@
 
         var transformer = new Konva.Transformer({ nodes: [], keepRatio: true, rotateEnabled: true, anchorSize: 20, borderStrokeWidth: 2 });
         tokenLayer.add(transformer);
+
+        // --- ARRASTAR E SOLTAR (DROP) ---
+        // Permite que o elemento aceite "drops"
+        window.addEventListener('dragover', (e) => {
+            e.preventDefault(); // Obrigatório para permitir o drop
+        });
+
+        // Quando soltar o arquivo
+        window.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (!isGM) return; // Só mestre pode soltar
+
+            // Pega os dados enviados pelo Dashboard
+            const dataString = e.dataTransfer.getData('text/plain');
+            if (!dataString) return;
+
+            try {
+                const data = JSON.parse(dataString);
+                
+                // Calcula a posição no mapa baseada no mouse e no zoom do palco
+                stage.setPointersPositions(e);
+                const pointer = stage.getPointerPosition();
+                
+                const mapX = (pointer.x - stage.x()) / stage.scaleX();
+                const mapY = (pointer.y - stage.y()) / stage.scaleY();
+
+                if (data.type === 'map') {
+                    socket.emit('gm_change_map', data.url);
+                } else {
+                    socket.emit('gm_add_token', { id: 'tk_'+Date.now(), x: mapX, y: mapY, img: data.url });
+                }
+            } catch (err) {
+                console.error("Erro ao soltar:", err);
+            }
+        });
 
         stage.on('click tap', (e) => {
             if (e.target === stage || e.target.getLayer() === mapLayer) {
@@ -168,26 +183,14 @@
 
         function createToken(data) {
             carregarMidia(data.img, (mediaElement) => {
-                // --- AJUSTE DE ASPECTO (TOKEN NÃO QUADRADO) ---
                 let w, h;
-                const maxSize = 100; // Tamanho base
-                
-                // Se for vídeo, usa videoWidth, se img, usa width natural
+                const maxSize = 100; 
                 const naturalW = mediaElement.videoWidth || mediaElement.width;
                 const naturalH = mediaElement.videoHeight || mediaElement.height;
-                
-                // Calcula proporção para não distorcer
-                if (naturalW > naturalH) {
-                    w = maxSize;
-                    h = maxSize * (naturalH / naturalW);
-                } else {
-                    h = maxSize;
-                    w = maxSize * (naturalW / naturalH);
-                }
+                if (naturalW > naturalH) { w = maxSize; h = maxSize * (naturalH / naturalW); } 
+                else { h = maxSize; w = maxSize * (naturalW / naturalH); }
 
-                // Se o servidor mandou escala salva, usa a escala do servidor sobre o tamanho base
-                const scaleX = data.scaleX || 1;
-                const scaleY = data.scaleY || 1;
+                const scaleX = data.scaleX || 1; const scaleY = data.scaleY || 1;
 
                 const tokenNode = new Konva.Image({
                     image: mediaElement, id: data.id, x: data.x, y: data.y,
@@ -230,18 +233,9 @@
             limparTokens();
             if(state.sceneImage) setBackground(state.sceneImage);
             if(state.tokens) state.tokens.forEach(createToken);
-            
-            // Toca audio se tiver (com sync)
             if(state.currentAudio) {
-                // Passa o startTime que veio do servidor
-                socket.emit('request_audio_sync'); // Não precisa, já veio no state?
-                // O servidor agora manda audioStartTime dentro de init_state?
-                // Vamos usar a lógica de play_audio manual aqui
-                // Simula evento play_audio
                 const audioData = { ...state.currentAudio, startTime: state.audioStartTime };
-                // Pequeno delay para garantir DOM
                 setTimeout(() => {
-                     // Chama a mesma lógica do socket.on('play_audio')
                      const eventData = audioData;
                      audioPlayer.src = eventData.url; audioPlayer.loop = eventData.loop; audioPlayer.volume = globalVolume;
                      if(eventData.startTime) {
@@ -258,10 +252,7 @@
 
         socket.on('set_background', setBackground);
         socket.on('add_token', createToken);
-        
-        // Movimentação vinda de outros
         socket.on('update_token', (d) => { const n=stage.findOne('#'+d.id); if(n) n.to({x:d.x, y:d.y, duration:0.1}); });
-        
         socket.on('update_token_size', (d) => { const n=stage.findOne('#'+d.id); if(n && transformer.nodes().indexOf(n)===-1) {n.scaleX(d.scaleX); n.scaleY(d.scaleY); n.rotation(d.rotation);} });
         socket.on('delete_token', (id) => { const n=stage.findOne('#'+id); if(n) { if(n.image() instanceof HTMLVideoElement) n.image().remove(); n.destroy(); transformer.nodes([]); } });
         socket.on('clear_tokens', () => { limparTokens(); tokenLayer.draw(); });

@@ -8,7 +8,7 @@
             width: 340px; background: #1e1e1e; display: flex; flex-direction: column; 
             border-right: 1px solid #000; gap: 10px; padding: 10px; overflow-y: auto; 
         }
-        #main { flex: 1; display: flex; flex-direction: column; background: #000; }
+        #main { flex: 1; display: flex; flex-direction: column; background: #000; position: relative; }
         iframe { width: 100%; height: 100%; border: none; }
 
         ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -16,9 +16,7 @@
         ::-webkit-scrollbar-thumb { background: #444; border-radius: 5px; border: 2px solid #111; }
         ::-webkit-scrollbar-thumb:hover { background: #00ff00; }
 
-        .item-list { 
-            overflow-y: auto; background: #111; border: 1px solid #333; border-radius: 4px; padding: 5px; min-height: 80px; max-height: 200px; 
-        }
+        .item-list { overflow-y: auto; background: #111; border: 1px solid #333; border-radius: 4px; padding: 5px; min-height: 80px; max-height: 250px; }
         .section-title { color: #888; font-size: 11px; text-transform: uppercase; font-weight: bold; margin-top: 15px; margin-bottom: 5px; letter-spacing: 1px; }
         button { cursor: pointer; background: #333; color: white; border: 1px solid #444; padding: 8px; border-radius: 4px; transition: 0.2s; }
         button:hover { background: #555; border-color: #666; }
@@ -26,7 +24,8 @@
         .save-box { background: #252525; padding: 10px; border: 1px solid #333; border-radius: 5px; display: flex; flex-direction: column; gap: 8px; }
         input[type="text"] { background: #000; border: 1px solid #444; color: white; padding: 6px; border-radius: 3px; outline: none; }
         
-        .asset-btn { display: flex; align-items: center; gap: 10px; padding: 6px; background: #2a2a2a; cursor: pointer; margin-bottom: 4px; border-radius: 4px; }
+        .asset-btn { display: flex; align-items: center; gap: 10px; padding: 6px; background: #2a2a2a; cursor: grab; margin-bottom: 4px; border-radius: 4px; }
+        .asset-btn:active { cursor: grabbing; }
         .asset-btn:hover { background: #3a3a3a; }
         .thumb { width: 48px; height: 48px; object-fit: cover; background: #000; border-radius: 4px; border: 1px solid #444; flex-shrink: 0; }
         
@@ -35,12 +34,68 @@
         .unlocked { background-color: #1e7e34; border: 1px solid #1e7e34; }
         .locked { background-color: #bd2130; border: 1px solid #bd2130; }
         #ip-display { background: #003300; padding: 10px; border-radius: 5px; text-align: center; font-weight: bold; border: 1px solid #00ff00; color: #00ff00; margin-bottom: 10px; }
+
+        /* --- ESTILOS DO MODAL --- */
+        #btn-mudar-mapa { background-color: #0056b3; font-weight: bold; padding: 15px; font-size: 14px; width: 100%; border: 1px solid #007bff; }
+        #btn-mudar-mapa:hover { background-color: #007bff; }
+
+        #modal-mapas {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); z-index: 10000; flex-direction: column;
+            align-items: center; justify-content: center; padding: 20px; box-sizing: border-box;
+            backdrop-filter: blur(5px);
+        }
+        #modal-mapas-content {
+            background: #1e1e1e; width: 95%; max-width: 1300px; height: 90%; border-radius: 8px;
+            display: flex; flex-direction: column; overflow: hidden; border: 1px solid #444;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+        #modal-mapas-header {
+            padding: 15px 20px; background: #111; display: flex; justify-content: space-between;
+            align-items: center; border-bottom: 1px solid #333;
+        }
+        
+        #modal-mapas-grid {
+            padding: 20px; 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
+            grid-auto-rows: max-content; 
+            gap: 20px; 
+            overflow-y: auto; 
+            flex: 1; 
+            background: #0a0a0a; 
+            align-items: start; 
+        }
+
+        .map-card {
+            background: #111; border: 2px solid #333; border-radius: 8px; cursor: pointer;
+            transition: 0.2s; overflow: hidden; display: flex; flex-direction: column;
+        }
+        .map-card:hover { border-color: #00ff00; transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,255,0,0.3); }
+        
+        .map-card-thumb {
+            width: 100%; 
+            height: 180px; 
+            object-fit: cover; 
+            background: #000; 
+            border-bottom: 1px solid #333;
+        }
+        
+        .map-card-title {
+            padding: 12px; font-size: 14px; text-align: center; font-weight: bold;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #eee;
+        }
+        .btn-close { background: #ff4444; color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        .btn-close:hover { background: #ff0000; }
     </style>
 </head>
 <body>
     <div id="sidebar">
         <div id="ip-display">Buscando IP...</div>
         <button id="btnLock" class="unlocked" onclick="toggleLock()">🔓 MOVIMENTAÇÃO LIBERADA</button>
+
+        <div class="section-title">CENÁRIO</div>
+        <button id="btn-mudar-mapa" onclick="abrirModalMapas()">🗺️ ESCOLHER MAPA</button>
 
         <div class="section-title">GRAVAR JOGO</div>
         <div class="save-box">
@@ -63,11 +118,7 @@
         <div class="section-title">CENAS SALVAS</div>
         <div id="dynamic-scenes" class="item-list"></div>
 
-        <div class="section-title">MAPAS (Vídeo/Img)</div>
-        <button onclick="carregarLista('Maps', 'map', 'lista-mapas')" style="width:100%; margin-bottom:5px;">🔄 Atualizar Mapas</button>
-        <div id="lista-mapas" class="item-list"></div>
-
-        <div class="section-title">TOKENS</div>
+        <div class="section-title">TOKENS (Arraste para o Mapa)</div>
         <div id="dynamic-categories" class="item-list" style="flex: 1; min-height: 200px;"></div>
     </div>
 
@@ -75,10 +126,25 @@
         <iframe id="preview" src="http://localhost:3000"></iframe>
     </div>
 
+    <div id="modal-mapas">
+        <div id="modal-mapas-content">
+            <div id="modal-mapas-header">
+                <h2 style="margin:0; font-size:18px; color: white;">🗺️ Galeria de Mapas</h2>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="forcarAtualizacaoMapas()" style="background: #444; border:none; padding: 8px 15px;">🔄 Atualizar Pasta</button>
+                    <button class="btn-close" onclick="fecharModalMapas()">✖ FECHAR</button>
+                </div>
+            </div>
+            <div id="modal-mapas-grid"></div>
+        </div>
+    </div>
+
     <script src="http://localhost:3000/socket.io/socket.io.js"></script>
     <script>
         const { ipcRenderer } = require('electron');
         const socket = io('http://localhost:3000');
+
+        let mapasJaCarregados = false; 
 
         ipcRenderer.invoke('get-ip').then(ip => {
             const el = document.getElementById('ip-display');
@@ -94,12 +160,79 @@
 
         ipcRenderer.on('folders-updated', () => {
             carregarCategoriasTokens(); carregarCenasPorSessao();
-            carregarLista('Sounds', 'sound', 'lista-sons'); // Atualiza sons
-            carregarLista('Maps', 'map', 'lista-mapas');
+            carregarLista('Sounds', 'sound', 'lista-sons');
+            mapasJaCarregados = false; 
         });
 
         function pararSom() { socket.emit('gm_stop_audio'); }
 
+        // --- LÓGICA DA GALERIA EXTREMAMENTE OTIMIZADA ---
+        function abrirModalMapas() {
+            document.getElementById('modal-mapas').style.display = 'flex';
+            if (!mapasJaCarregados) {
+                carregarGridMapas(); 
+            }
+        }
+
+        function fecharModalMapas() {
+            document.getElementById('modal-mapas').style.display = 'none';
+        }
+
+        function forcarAtualizacaoMapas() {
+            carregarGridMapas();
+        }
+
+        async function carregarGridMapas() {
+            const container = document.getElementById('modal-mapas-grid');
+            container.innerHTML = '<div style="color:white; grid-column: 1 / -1; text-align:center; padding: 50px; font-size: 20px;">🔄 Montando Galeria...</div>';
+            
+            const arquivos = await ipcRenderer.invoke('get-files', 'Maps');
+            
+            if (arquivos.length === 0) {
+                container.innerHTML = '<div style="color:#aaa; grid-column: 1 / -1; text-align:center;">Nenhum mapa encontrado na pasta "Maps".</div>';
+                return;
+            }
+
+            // O Segredo 1: Montamos uma STRING gigante de HTML primeiro, em vez de criar os elementos um por um
+            let HTMLDosCartoes = '';
+
+            arquivos.forEach(file => {
+                const safeName = encodeURIComponent(file);
+                const thumbUrl = `http://localhost:3000/assets/Maps/${safeName}`;
+                const socketUrl = `/assets/Maps/${file}`;
+                
+                const isVideo = file.match(/\.(mp4|webm)$/i);
+                
+                // O Segredo 2: Videos com preload="metadata" (para não baixar o video todo) e loading="lazy" nas imgs
+                let thumbHtml = isVideo 
+                    ? `<video src="${thumbUrl}#t=0.1" class="map-card-thumb" preload="metadata" muted playsinline onmouseenter="this.play()" onmouseleave="this.pause()"></video>` 
+                    : `<img src="${thumbUrl}" class="map-card-thumb" loading="lazy">`;
+                
+                HTMLDosCartoes += `
+                    <div class="map-card" data-url="${socketUrl}">
+                        ${thumbHtml}
+                        <div class="map-card-title" title="${file}">${file.replace(/\.[^/.]+$/, "")}</div>
+                    </div>
+                `;
+            });
+
+            // Injetamos tudo de uma vez só no navegador (muito mais leve)
+            container.innerHTML = HTMLDosCartoes;
+
+            // O Segredo 3: Um único "escutador" de cliques para todos os mapas (Delegação de Eventos)
+            container.onclick = function(event) {
+                const card = event.target.closest('.map-card');
+                if (card) {
+                    const url = card.getAttribute('data-url');
+                    socket.emit('gm_change_map', url);
+                    fecharModalMapas();
+                }
+            };
+
+            mapasJaCarregados = true; 
+        }
+
+        // --- TOKENS, CENAS, SONS ---
         async function carregarCategoriasTokens() {
             const container = document.getElementById('dynamic-categories');
             const pastas = await ipcRenderer.invoke('get-files', 'Tokens');
@@ -143,22 +276,39 @@
                 const thumbUrl = `http://localhost:3000/assets/${pasta}/${safeName}`;
                 const socketUrl = `/assets/${pasta}/${file}`;
 
+                if (tipo === 'token') {
+                    btn.setAttribute('draggable', 'true');
+                    btn.ondragstart = (e) => { e.dataTransfer.setData('text/plain', JSON.stringify({ url: socketUrl, type: tipo })); };
+                }
+
                 if (tipo === 'cena') {
+                    const nomeSessao = pasta.split('/')[1];
                     btn.innerHTML = `🎬 <span style="font-size:12px">${file.replace('.json', '')}</span>`;
                     btn.onclick = async () => { if(confirm("Carregar cena?")) ipcRenderer.invoke('load-scene', { nomeSessao: pasta.split('/')[1], nomeArquivo: file }); };
                 } 
                 else if (tipo === 'sound') {
-                    // Lógica específica de SOM
                     btn.innerHTML = `🎵 <span style="font-size:12px">${file}</span>`;
                     btn.onclick = () => socket.emit('gm_play_audio', { url: socketUrl, loop: true });
                 }
                 else {
                     const isVideo = file.match(/\.(mp4|webm)$/i);
-                    let thumbHtml = isVideo ? `<video src="${thumbUrl}" class="thumb" autoplay loop muted playsinline></video>` : `<img src="${thumbUrl}" class="thumb">`;
+                    let thumbHtml = isVideo ? `<video src="${thumbUrl}#t=0.1" preload="metadata" class="thumb"></video>` : `<img src="${thumbUrl}" loading="lazy" class="thumb">`;
                     btn.innerHTML = `${thumbHtml} <div style="display:flex; flex-direction:column;"><span style="font-size:11px; font-weight:bold;">${file.substring(0, 18)}</span></div>`;
+                    
                     btn.onclick = () => {
-                        if(tipo === 'map') socket.emit('gm_change_map', socketUrl);
-                        else socket.emit('gm_add_token', { id: 'tk_'+Date.now(), x: 400, y: 300, img: socketUrl });
+                        try {
+                            const previewWindow = document.getElementById('preview').contentWindow;
+                            if (previewWindow && previewWindow.stage) {
+                                const st = previewWindow.stage;
+                                const centerX = (-st.x() + st.width() / 2) / st.scaleX();
+                                const centerY = (-st.y() + st.height() / 2) / st.scaleY();
+                                socket.emit('gm_add_token', { id: 'tk_'+Date.now(), x: centerX, y: centerY, img: socketUrl });
+                            } else {
+                                throw new Error("Stage não acessível");
+                            }
+                        } catch (e) {
+                            socket.emit('gm_add_token', { id: 'tk_'+Date.now(), x: 400, y: 300, img: socketUrl });
+                        }
                     };
                 }
                 container.appendChild(btn);
@@ -176,7 +326,12 @@
             else { document.getElementById('msg-save').innerText = "Erro!"; alert(res.error); }
         }
 
-        setTimeout(() => { carregarLista('Maps', 'map', 'lista-mapas'); carregarLista('Sounds', 'sound', 'lista-sons'); carregarCategoriasTokens(); carregarCenasPorSessao(); }, 500);
+        // Removido o pré-carregamento absurdo de mapas daqui para liberar sua RAM no momento em que o VTT inicia
+        setTimeout(() => { 
+            carregarLista('Sounds', 'sound', 'lista-sons'); 
+            carregarCategoriasTokens(); 
+            carregarCenasPorSessao(); 
+        }, 500);
     </script>
 </body>
 </html>

@@ -15,24 +15,42 @@ let gameState = {
     tokens: [],
     playersLocked: false,
     currentAudio: null,
-    audioStartTime: 0 // <--- NOVO: Guarda quando a musica começou
+    audioStartTime: 0
 };
 
-const ASSETS_PATH = path.join(__dirname, '../assets');
+// --- MUDANÇA CRÍTICA PARA O INSTALADOR ---
+const documentsPath = app.getPath('documents');
+const ASSETS_PATH = path.join(documentsPath, 'OpenVTT_Assets');
+
 const TOKENS_PATH = path.join(ASSETS_PATH, 'Tokens');
 const CENAS_PATH = path.join(ASSETS_PATH, 'Cenas');
 const SOUNDS_PATH = path.join(ASSETS_PATH, 'Sounds');
+const MAPS_PATH = path.join(ASSETS_PATH, 'Maps');
+
+// Função para garantir que as pastas existem na primeira vez que abre
+function garantirPastas() {
+    if (!fs.existsSync(ASSETS_PATH)) fs.mkdirSync(ASSETS_PATH, { recursive: true });
+    if (!fs.existsSync(TOKENS_PATH)) fs.mkdirSync(TOKENS_PATH, { recursive: true });
+    if (!fs.existsSync(CENAS_PATH)) fs.mkdirSync(CENAS_PATH, { recursive: true });
+    if (!fs.existsSync(SOUNDS_PATH)) fs.mkdirSync(SOUNDS_PATH, { recursive: true });
+    if (!fs.existsSync(MAPS_PATH)) fs.mkdirSync(MAPS_PATH, { recursive: true });
+    console.log("Pastas garantidas em: " + ASSETS_PATH);
+}
 
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1200, height: 800,
-        title: "Painel do Mestre - VTT",
+        title: "Painel do Mestre - OpenVTT",
+        
+        icon: path.join(__dirname, '../build/icon.png'), 
+        
         webPreferences: { nodeIntegration: true, contextIsolation: false }
     });
     mainWindow.loadFile('src/dashboard.html');
 }
 
 app.whenReady().then(() => {
+    garantirPastas(); // <--- CRIA AS PASTAS ASSIM QUE ABRE
     createWindow();
     iniciarServidor();
     iniciarVigilanciaDePastas();
